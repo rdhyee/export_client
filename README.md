@@ -218,20 +218,29 @@ For more information about working with PQG, see the [PQG documentation](https:/
 
 ### Schema Mapping Reference
 
-The converter maps iSamples fields to PQG as follows:
+The converter provides **lossless conversion** - all iSamples fields are preserved in PQG:
 
-| iSamples Field | PQG Node Type | Notes |
+| iSamples Field | PQG Mapping | Notes |
 |---|---|---|
 | sample_identifier | Sample (pid) | Used as the unique identifier |
 | label | Sample (label) | Human-readable name |
 | description | Sample (description) | Extended description |
+| alternate_identifiers | Sample (altids) | Uses PQG's built-in altids field |
 | produced_by | SamplingEvent node | Connected via produced_by edge |
+| sampling_purpose | Sample property | Why sample was collected |
 | produced_by.sampling_site | SamplingSite node | Nested decomposition |
-| sampling_site.sample_location | Location node | Geographic coordinates |
+| sampling_site.sample_location | Location node | Geographic coordinates (lat/lon/elevation) |
 | has_specimen_category | Category nodes | Multiple edges created |
 | has_material_category | Category nodes | Multiple edges created |
 | has_context_category | Category nodes | Multiple edges created |
+| keywords | Sample property | Stored as array |
+| related_resource | RelatedResource nodes | Separate nodes with typed edges |
+| complies_with | Sample property | Standards followed (array) |
+| dc_rights | Sample property | Rights statement |
 | curation | Curation node | Connected via curation edge |
 | registrant | Agent node | Connected via registrant edge |
-| keywords | Sample property | Stored as array |
 | informal_classification | Sample property | Stored as array |
+| geometry | Sample property | Stored as WKT in geometry_wkt |
+| source_collection | Named graph (n) | Used for organizational grouping |
+
+**Note**: The converter creates 8 node types (Sample, SamplingEvent, SamplingSite, Location, Category, Curation, Agent, RelatedResource) and preserves all relationships through typed edges. All data from the GeoParquet export is preserved.

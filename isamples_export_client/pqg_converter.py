@@ -224,6 +224,42 @@ class ISamplesPQGConverter:
 
         return agent_pid
 
+    def _extract_related_resource(self, resource_data: Optional[Dict]) -> Optional[str]:
+        """
+        Extract and create a RelatedResource node.
+
+        Args:
+            resource_data: Dictionary containing related resource information
+
+        Returns:
+            PID of the created RelatedResource node, or None if no data
+        """
+        if not resource_data or not isinstance(resource_data, dict):
+            return None
+
+        target = resource_data.get('target')
+        if not target:
+            return None
+
+        # Use target as pid if it's a URI, otherwise generate one
+        if target.startswith('http://') or target.startswith('https://'):
+            resource_pid = target
+        else:
+            resource_pid = self._generate_pid('resource', resource_data)
+
+        relationship = resource_data.get('relationship', 'related')
+        label = resource_data.get('label', target)
+
+        self._add_node_if_not_exists(
+            pid=resource_pid,
+            otype='RelatedResource',
+            label=label,
+            target=target,
+            relationship_type=relationship
+        )
+
+        return resource_pid
+
     def _extract_curation(self, sample_pid: str, curation_data: Optional[Dict]) -> Optional[str]:
         """
         Extract and create a Curation node.
@@ -320,14 +356,50 @@ class ISamplesPQGConverter:
         if not isinstance(informal_class, list):
             informal_class = []
 
+        # Extract alternate identifiers for PQG's altids field
+        altids = []
+        alt_ids_data = row.get('alternate_identifiers', [])
+        if isinstance(alt_ids_data, list):
+            for alt_id in alt_ids_data:
+                if isinstance(alt_id, dict):
+                    identifier = alt_id.get('identifier')
+                    if identifier:
+                        altids.append(str(identifier))
+
+        # Extract related resources, complies_with, and other fields
+        related_resources = row.get('related_resource', [])
+        if not isinstance(related_resources, list):
+            related_resources = []
+
+        complies_with = row.get('complies_with', [])
+        if not isinstance(complies_with, list):
+            complies_with = []
+
+        # Extract geometry as WKT if present
+        geometry_wkt = None
+        if hasattr(row, 'geometry') and row.geometry is not None:
+            try:
+                geometry_wkt = row.geometry.wkt
+            except Exception:
+                pass
+
+        # Use source_collection as named graph
+        named_graph = row.get('source_collection')
+
         self._add_node_if_not_exists(
             pid=sample_id,
             otype='Sample',
             label=label,
             description=description,
+            altids=altids if altids else None,
             keywords=keywords if keywords else None,
             informal_classification=informal_class if informal_class else None,
-            source_collection=row.get('source_collection')
+            source_collection=named_graph,
+            sampling_purpose=row.get('sampling_purpose'),
+            complies_with=complies_with if complies_with else None,
+            dc_rights=row.get('dc_rights'),
+            geometry_wkt=geometry_wkt,
+            n=named_graph  # Use source_collection as named graph
         )
 
         # Process produced_by -> SamplingEvent
@@ -361,6 +433,15 @@ class ISamplesPQGConverter:
             cat_pids = self._extract_categories(sample_id, cat_data, cat_type)
             if cat_pids:
                 self.graph.addEdge(s=sample_id, p=cat_field, o=cat_pids)
+
+        # Process related resources
+        if related_resources:
+            for resource_data in related_resources:
+                if isinstance(resource_data, dict):
+                    resource_pid = self._extract_related_resource(resource_data)
+                    if resource_pid:
+                        relationship = resource_data.get('relationship', 'related_to')
+                        self.graph.addEdge(s=sample_id, p=f'related_{relationship}', o=[resource_pid])
 
     def convert_parquet_to_pqg(self, parquet_file: str, output_file: str) -> None:
         """
