@@ -381,6 +381,8 @@ class ISamplesPQGConverter:
             try:
                 geometry_wkt = row.geometry.wkt
             except Exception:
+                # Geometry conversion failed - continue without geometry
+                # (Some records may have malformed or unsupported geometry types)
                 pass
 
         # Use source_collection as named graph
